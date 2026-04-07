@@ -1,0 +1,436 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>One Cup - Draft & Balanceo Pro</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap');
+    body { font-family: 'Inter', sans-serif; background-color: #050505; color: #f3f4f6; overflow-x: hidden; font-size: 1.05rem; }
+
+    /* Estilos para los iconos del título */
+    .title-container {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 1.5rem;
+      margin-bottom: 0.5rem;
+    }
+    .title-icon {
+      height: 4.5rem; /* Tamaño proporcional al text-7xl */
+      width: auto;
+      object-fit: contain;
+      filter: drop-shadow(0 0 15px rgba(239, 68, 68, 0.4));
+    }
+    @media (max-width: 768px) {
+      .title-icon { height: 3rem; }
+      .title-container { gap: 0.75rem; }
+    }
+
+    .character-card { transition: all 0.2s ease; border: 1px solid #1f2937; position: relative; overflow: hidden; background: #0a0a0a; }
+    .character-card:hover { border-color: #ef4444; transform: translateY(-3px); }
+    .character-card.selected { border-color: #ef4444; background: #111827; box-shadow: 0 0 25px rgba(239, 68, 68, 0.3); }
+    .character-card.banned { filter: grayscale(1) brightness(0.3); opacity: 0.5; }
+    .character-card.banned::after { 
+      content: 'BANEADO'; position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+      color: #ef4444; font-weight: 900; font-size: 0.8rem; letter-spacing: 2px; background: rgba(0,0,0,0.6); transform: rotate(-10deg);
+    }
+
+    .tab-btn { border-bottom: 4px solid transparent; transition: 0.3s; color: #4b5563; font-weight: 900; text-transform: uppercase; letter-spacing: 0.15em; font-size: 1rem; }
+    .tab-btn.active { border-color: #ef4444; color: white; }
+
+    .tier-accordion { background: #080808; border: 1px solid #141414; border-radius: 12px; margin-bottom: 0.75rem; overflow: hidden; transition: 0.3s; }
+    .tier-trigger { 
+      width: 100%; padding: 1.25rem 1.75rem; display: flex; justify-content: space-between; align-items: center;
+      cursor: pointer; background: #0f0f0f; transition: 0.3s; border-left: 6px solid #1f2937;
+    }
+    
+    .t-1 .tier-trigger { border-left-color: #b91c1c; }
+    .t-2 .tier-trigger { border-left-color: #ea580c; }
+    .t-3 .tier-trigger { border-left-color: #eab308; }
+    .t-4 .tier-trigger { border-left-color: #16a34a; }
+    .t-5 .tier-trigger { border-left-color: #15803d; }
+
+    .tier-content { max-height: 0; transition: max-height 0.4s ease-out; background: #050505; }
+    .tier-accordion.open .tier-content { max-height: 6000px; padding: 2rem; }
+    .tier-accordion.open { border-color: rgba(239, 68, 68, 0.4); }
+    .icon-plus { transition: transform 0.3s ease; font-size: 1.5rem; color: #444; }
+    .tier-accordion.open .icon-plus { transform: rotate(45deg); color: #ef4444; }
+
+    .ban-notif { position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%); background: #ef4444; color: white; padding: 12px 30px; border-radius: 50px; font-weight: 900; font-size: 0.9rem; z-index: 100; opacity: 0; transition: 0.3s; pointer-events: none; }
+
+    .perk-container-visual {
+      position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center;
+      background: rgba(239, 68, 68, 0.03); border: 1px solid rgba(239, 68, 68, 0.1);
+      border-radius: 12px; padding: 1rem; transition: 0.3s; cursor: help;
+    }
+    .perk-container-visual:hover { background: rgba(239, 68, 68, 0.08); border-color: #ef4444; }
+    
+    .perk-icon-big { width: 80px; height: 80px; object-fit: contain; transition: transform 0.3s ease; }
+    
+    .perk-container-visual:hover .perk-icon-big { transform: scale(0.85) translateY(-8px); }
+    .perk-name-overlay { position: absolute; bottom: 8px; opacity: 0; transition: 0.3s; text-align: center; font-weight: 900; text-transform: uppercase; font-size: 9px; color: #ef4444; width: 90%; line-height: 1.1; pointer-events: none; }
+    .perk-container-visual:hover .perk-name-overlay { opacity: 1; }
+    
+    .perk-container-surv { border-color: rgba(59, 130, 246, 0.1); background: rgba(59, 130, 246, 0.03); }
+    .perk-container-surv:hover { border-color: #3b82f6; background: rgba(59, 130, 246, 0.08); }
+    .perk-container-surv:hover .perk-name-overlay { color: #3b82f6; }
+
+    .combo-wrapper { display: flex; align-items: center; justify-content: center; gap: 12px; background: rgba(0,0,0,0.2); padding: 12px; border-radius: 16px; border: 1px solid rgba(255,255,255,0.03); }
+    .combo-plus-sign { font-size: 20px; font-weight: 900; color: #444; }
+  </style>
+</head>
+<body class="p-6 md:p-10">
+
+  <div id="ban-toast" class="ban-notif uppercase tracking-widest text-center shadow-2xl">Asesino Baneado del Draft</div>
+
+  <header class="max-w-[1700px] mx-auto mb-10 text-center">
+    <div class="title-container">
+      <img src="img/logo_izq.png" class="title-icon" onerror="this.src='https://placehold.co/100/000/ef4444?text=🏆'">
+      <h1 class="text-7xl font-black italic tracking-tighter uppercase">One <span class="text-red-600">Cup</span></h1>
+      <img src="img/logo_der.png" class="title-icon" onerror="this.src='https://placehold.co/100/000/ef4444?text=🏆'">
+    </div>
+    
+    <p class="text-[11px] font-bold text-gray-500 uppercase tracking-[0.5em] mb-10">balanceo y Draft Tool</p>
+    <nav class="flex justify-center gap-10 border-b border-gray-900">
+      <button onclick="switchTab('asesino')" id="btn-asesino" class="tab-btn active px-8 py-5">Asesinos</button>
+      <button onclick="switchTab('superviviente')" id="btn-superviviente" class="tab-btn px-8 py-5">Supervivientes</button>
+      <button onclick="switchTab('perks')" id="btn-perks" class="tab-btn px-8 py-5">Perks</button>
+      <button onclick="switchTab('mapas')" id="btn-mapas" class="tab-btn px-8 py-5">Mapas</button>
+    </nav>
+  </header>
+
+  <div class="max-w-[1700px] mx-auto grid grid-cols-1 xl:grid-cols-[1fr,450px] gap-10" id="main-layout">
+    <main id="main-content">
+      <div id="draft-controls" class="mb-8 flex justify-between items-center bg-gray-900/10 p-5 rounded-xl border border-gray-800/50">
+        <span class="text-[11px] font-bold text-gray-500 uppercase tracking-widest">💡 Click derecho para BANEAR / Pasa el ratón para ver nombre de Perks</span>
+        <button onclick="resetBans()" class="text-[11px] font-black uppercase text-red-500 hover:text-red-400 transition">Reiniciar Draft</button>
+      </div>
+
+      <section id="asesino-view" class="tab-content space-y-3"></section>
+      <section id="superviviente-view" class="tab-content hidden space-y-3"></section>
+
+      <section id="perks-view" class="tab-content hidden space-y-10 animate-in fade-in">
+        <div class="space-y-6">
+          <div class="bg-red-900/10 border border-red-900/20 p-8 rounded-3xl">
+            <h3 class="text-xl font-black italic uppercase text-red-500 mb-6 tracking-tighter">Habilidades generales de asesino baneadas</h3>
+            <div id="killer-general-grid" class="grid grid-cols-2 md:grid-cols-5 gap-4"></div>
+            
+            <h4 class="text-xs font-black text-red-400 uppercase mt-10 mb-4 tracking-widest italic">Combos Prohibidos (Killer)</h4>
+            <div id="killer-combos-grid" class="grid grid-cols-1 md:grid-cols-2 gap-6"></div>
+
+            <h4 class="text-xs font-black text-red-400 uppercase mt-8 mb-4 tracking-widest italic">Accesorios Globales Prohibidos</h4>
+            <div class="flex flex-col items-start gap-2">
+                <div class="perk-container-visual !flex-row !gap-4 !px-6 !py-3">
+                  <img src="img/addon/suero_del_deterioro.png" class="perk-icon-big !w-16 !h-16" onerror="handleImgError(this, 'Suero del Deterioro', 'addon')">
+                  <span class="text-[10px] font-black text-red-100 uppercase tracking-widest">Suero del Deterioro (Todos los Asesinos)</span>
+                </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="space-y-6">
+          <div class="bg-blue-900/10 border border-blue-900/20 p-8 rounded-3xl">
+            <h3 class="text-xl font-black italic uppercase text-blue-500 mb-6 tracking-tighter">Habilidades generales de supervivientes baneadas</h3>
+            <div id="surv-general-grid" class="grid grid-cols-2 md:grid-cols-5 gap-4"></div>
+
+            <h4 class="text-xs font-black text-blue-400 uppercase mt-10 mb-4 tracking-widest italic">Combos Prohibidos (Survivor)</h4>
+            <div id="surv-combos-grid" class="grid grid-cols-1 md:grid-cols-2 gap-6"></div>
+          </div>
+        </div>
+      </section>
+
+      <section id="mapas-view" class="tab-content hidden animate-in fade-in">
+        <div id="mapas-header" class="mb-8 text-center p-8 bg-blue-900/5 rounded-2xl border border-blue-900/10">
+          <p id="map-instructions" class="text-xs font-black text-blue-500 uppercase tracking-[0.2em]">Selecciona un asesino primero</p>
+        </div>
+        <div id="mapas-grid" class="grid grid-cols-1 md:grid-cols-2 gap-6"></div>
+      </section>
+    </main>
+
+    <aside id="sidebar-main">
+      <div id="sidebar-container" class="sticky top-10 bg-[#0c0c0c] border border-gray-900 rounded-[2rem] p-10 min-h-[650px] flex flex-col shadow-2xl">
+        <div id="info-content" class="flex-1 flex flex-col items-center justify-center text-center opacity-40">
+            <p class="text-gray-700 font-bold uppercase text-[10px] tracking-[0.4em] leading-loose">Selecciona un Killer para ver sus restricciones<br>de la One Cup</p>
+        </div>
+      </div>
+    </aside>
+  </div>
+
+  <script>
+    // --- LÓGICA DE IMÁGENES MEJORADA ---
+    const imageAliases = {
+      "Pim Pam Pum": "pop_goes_the_weasel",
+      "Gancho Flagelante: Dolor retumbante": "scourge_hook_pain_resonance",
+      "Sin salida": "no_way_out",
+      "Hijo de la Luz": "lightborn",
+      "Agitación": "agitation",
+      "Acechador de ciervos": "deerstalker",
+      "Discordancia": "discordance",
+      "Espías de las sombras": "spies_from_the_shadows",
+      "Toma una Decisión": "make_your_choice",
+      "Apretón de hierro": "iron_grasp",
+      "Furia ciega": "blind_rage",
+      "Suero del Deterioro": "blight_serum",
+      "Caja de Cerillas": "matchbox",
+      "Anillo de Madre e Hija": "mother_daughter_ring"
+    };
+
+    function getCleanFileName(name) {
+      if (!name) return "";
+      if (imageAliases[name]) return imageAliases[name];
+
+      return name.trim()
+        .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+        .replace(/\(.*\)/g, "")
+        .replace(/[^a-zA-Z0-9\s]/g, '')
+        .replace(/\s+/g, '_');
+    }
+
+    function handleImgError(img, originalName, folder) {
+      if (!img.dataset.triedLower) {
+        img.dataset.triedLower = "true";
+        const clean = getCleanFileName(originalName).toLowerCase();
+        let path = folder === 'perks' ? 'img/perks/' : 'img/addon/';
+        img.src = `${path}${clean}.png`;
+        return;
+      } 
+      const color = folder === 'perks' ? 'ef4444' : '3b82f6';
+      img.src = `https://placehold.co/100/000/${color}?text=?`;
+      img.onerror = null; 
+    }
+
+    function getPerkIcon(name) {
+      return `img/perks/${getCleanFileName(name)}.png`;
+    }
+
+    function getAddonIcon(name) {
+      return `img/addon/${getCleanFileName(name)}.png`;
+    }
+
+    // --- RESTO DE LA LÓGICA ---
+
+    function renderComboWithIcons(comboString, type = 'killer') {
+      const parts = comboString.split(/\s*\+\s*|\s*-\s*/);
+      const isSurv = type === 'surv';
+      const isAddon = type === 'addon';
+
+      return `
+      <div class="combo-wrapper">
+        ${parts.map((p, i) => {
+          const itemName = p.trim();
+          const iconSrc = isAddon ? getAddonIcon(itemName) : getPerkIcon(itemName);
+          
+          return `
+          <div class="perk-container-visual ${isSurv ? 'perk-container-surv' : ''} !p-2">
+            <img src="${iconSrc}" class="perk-icon-big !w-20 !h-20" onerror="handleImgError(this, '${itemName}', '${isAddon ? 'addon' : 'perks'}')">
+            <div class="perk-name-overlay !text-[8px]">${itemName}</div>
+          </div>
+          ${i < parts.length - 1 ? '<span class="combo-plus-sign">+</span>' : ''}
+          `;
+        }).join('')}
+      </div>`;
+    }
+
+    const bannedTier1 = { perks: ["Agitación", "Acechador de ciervos", "Discordancia", "Sin salida", "Gancho Flagelante: Dolor retumbante", "Espías de las sombras", "Hijo de la Luz"], combos: ["Pim Pam Pum + Erupción"], addons: { enfermera: ["Caja de Cerillas", "Marcapáginas Desgarrado", "Último suspiro de Campbell", "Último suspiro de Jenner", "Jadeo Intenso"], deterioro: ["Compuesto 33", "Etiqueta del Deterioro Iridiscente", "Anillo de Alquimista", "Vial de Adrenalina", "Compuesto 21"], pueblerino: [] }, addonCombos: { pueblerino: ["Carburador Ajustado - Mezcla de Los Thompson"] } };
+    const bannedTier2 = { perks: { darklord: ["Toma una Decisión","Gancho flagelante: Dolor retumbante","Hijo de la Luz"], ghoul: ["Toma una Decisión","Gancho flagelante: Dolor retumbante","Hijo de la Luz"], krasue: ["Toma una Decisión", "Hijo de la Luz"], espiritu: ["Toma una Decisión","Gancho flagelante: Dolor retumbante","Hijo de la Luz"], singularidad: ["Toma una Decisión", "Hijo de la Luz"] }, addons: { darklord: ["Escudo de Alucard","Anillo Vald Iridiscente","Colmillo de Warg","Cubo de Zoe","Cabello de Medusa"], ghoul: ["Máscara de Yamori","Aparato de tortura","Ciempiés Pelirrojo","Tarjeta de identificación de la CCG","Gafas de Rize"], krasue: ["Cabeza de pollo","Vestido desgarrado","Prismáticos de Teatro","Ojo de Cerdo"], singularidad: ["Formulario de requerimiento denegado","Fragmento de cristal iridiscente","Lista de la tripulación","Herramienta de Diagnóstico (Construcción)"], espiritu: ["Anillo de Madre e Hija","Taza de té Kintsugi","Flor de cerezo seca","Furin","Saya de Wakizashi","Amuleto Yakuyoke"] }, combos: { espiritu: ["Pim Pam Pum + Erupción"], singularidad: ["Pim Pam Pum + Erupción"], darklord: ["Pim Pam Pum + Erupción"], ghoul: ["Pim Pam Pum + Erupción"], krasue: ["Pim Pam Pum + Erupción"] } };
+    const bannedTier3 = { perks: ["Apretón de hierro", "Furia ciega", "Toma una decisión", "Gancho Flagelante: Santuario monstruoso", "Supervisión", "Hijo de la Luz"], addons: { animatronico:["Faz-Coin","Remanente iridiscente","Dibujo del hombre morado","Cuerdas de guitarra de Bonnie"], artista:["Jardín Putrefacto","Patucos de Matías"], cenobita:["Configuración de lamento iridiscente","Colmillo del Ingeniero"], payaso:["Meñique de pelirrojo","Dedo corazón de tatuado","Caja de puros"], arponero:["Moneda Iridiscente","Hierro de Hellshire"], demogorgon:["Liquen leproso"], draga:["Tablón de madera iridiscente","Cuchillo de sacrificio","Grabadora de campo","Micrófono inalámbrico"], pesadilla:["Bloque ¨Z¨"], goodguy:["Casco de seguridad","Amuleto iridiscente","Raticida","Criterio"], adiestradora:["Timón iridiscente","Novela desgarradora","Pasador de marinería","Lata de pólvora","Mapa sin terminar","Carne grasa"], cazadora:["Cabezal iridiscente"], caballero:["Estandarte iridiscente de la compañía","Contrato de caballero","Campanillas del carcelero","Cataplasma curativa","Pedernal y acero"], cerebro:["Frasco iridiscente de uroboros","Fotografía de laboratorio"], oni:["Escudo familiar iridiscente","Guante ensangrentado de Renjiro","Moño arrancado"], plaga:["Sello iridiscente","Incienso negro","Sello de Hematita","Sello de piedra caliza","Fragmento de tablilla de oraciones"], verdugo:["Cáliz de obsidiana","Pintura de Burning Man","Pie de maniquí","Día brumoso, restos del juicio","Correa negra"], traicionero:["Fotografía iridiscente","Recopilación ¨Agonía de muerte¨","Sensillo ¨Atravesare tu corazón¨","Gemelos de diamante","Álbum ¨Frontera de resurección¨","Hojas engañosas"], mellizos:["Colgante iridiscente","Tela insonorizante","Soldado de Víctor","Sonajero pesado"], desconocido:["Capturado por la oscuridad","Informe OSS iridiscente","Frasco de suero","Caja de desaparición","Reloj de hipnotizador"], liche:["Libro de oscuridad vil iridiscente","Espada Vorpal","Túnica de ojos"], xenomorfo:["Sangre ácida","Picana improvisada","Transportín para gatos","Arpón","Perno de autodestrucción","Teclado semiótico"], primero:["Pieza de ajedrez","Chip Soteria iridiscente","Araña viuda negra","Collar de electrochoque","Restos de conejo","Supercom destrozada","Radio de mediados de siglo","Reproductor de casete destrozado"] } };
+    const bannedTier4 = { perks: ["Hijo de la Luz"], addons: { onryo:["Cinta de video iridiscente","Mando a distancia","Mesa de edición de cinta"], cerda:["Carta de Amanda","Cinta de video","Caja de engranajes","Temporizador manipulado","Bolsa de engranajes"], comerciante:["Predicción avanzada de movimientos","Mejora infrarroja"], espectro:["\"Lo veo todo\": sangre"], doctor:["Rey Iridiscente","Reina Iridiscente"], ghostface:["Ghost Face pillado en video","Cámara de seguridad para exteriores"], legion:["Casete Humeante", "Botón Iridiscente", "Casete de Frank", "Estudio de Heridas de Arma Blanca", "Casete Susie", "Pin de la Legión", "Casete de Julie"], myers:["Espejo de Maquillaje","Cepillo"], nemesis:["Insignia iridiscente de Umbrella","Insignia de S.T.A.S.S destrozada","Moneda de recuperación rota","Cinta de intención agotada","Sándwich de Jill", "Parásito Ne-α"] } };
+    const bannedTier5 = { perks: ["Agitación", "Acechador de ciervos", "Discordancia", "Sin salida", "Gancho flagelante: Dolor retumbante", "Espías de las sombras", "Hijo de la Luz"], combos: ["Pim Pam Pum + Erupción"], addons: { trampero: ["Muelle Ensangrentado", "Piedra Iridiscente", "Piedra de Afilar", "Abrazadera Improvisada"], bruja: ["Trapo Impecable / Jirón Verde", "Zapato Empapado", "Oreja Desfigurada", "Corazón de la Abuela", "Cadenas Oxidadas", "Mano con Cicatrices"], canibal: ["Guía del Carburador", "Carne Iridiscente", "Batidor Ligero"] } };
+
+    const survBans = { t1: [], t2: { singularidad: ["Conocimientos de botánica", "Fajador", "Golpe decisivo", "Liberación", "Medidas desesperadas", "Conexión empática", "Fuerza interior", "Voluntad de hierro", "Sobreponerse", "Autocuración", "Solidaridad", "Inquebrantable", "Lo conseguiremos"], espiritu: ["Conocimientos de botánica", "Golpe decisivo", "Liberación", "Medidas desesperadas", "Conexión empática", "Fuerza interior", "Voluntad de hierro", "Autocuración", "Solidaridad"], trio: ["Conocimientos de botánica", "Fajador", "Golpe decisivo", "Liberación", "Medidas desesperadas", "Conexión empática", "Fuerza interior", "Voluntad de hierro", "Sobreponerse", "Autocuración", "Solidaridad", "Inquebrantable", "Lo conseguiremos"] }, t3: ["Conocimientos de botánica", "Fajador", "Golpe decisivo", "Liberación", "Medidas desesperadas", "Conexión empática", "Fuerza interior", "Agilidad", "Sobreponerse", "Segundo aliento", "Autocuración", "Solidaridad", "Esprint", "Inquebrantable", "Lo conseguiremos"], t4: ["Adrenalina", "Caída equilibrada", "De tripas corazón", "Mina explosiva", "Conocimientos de botánica", "Fajador", "Golpe decisivo", "Liberación", "Medidas desesperadas", "Conexión empática", "Esperanza", "Fuerza interior", "Líder", "Agilidad", "Golpe de suerte", "Sobreponerse", "Segundo aliento", "Autocuración", "Éxito aplastante", "Solidaridad", "Esprint", "Inquebrantable", "Lo conseguiremos"], t5: ["Adrenalina", "Caída equilibrada", "De tripas corazón", "Conocimientos de botánica", "Clarividencia", "Fajador", "Golpe decisivo", "Liberación", "Medidas desesperadas", "Conexión empática", "Esperanza", "Concentración interna", "Fuerza interior", "Líder", "Abandonado a tu suerte", "De pies ligeros", "Agilidad", "Golpe de suerte", "Sobreponerse", "Premonición", "Resiliencia", "Espíritu de novato", "Segundo aliento", "Autocuración", "Éxito aplastante", "Solidaridad", "Esprint", "Inquebrantable", "Lo conseguiremos"] };
+
+    const killerMaps = { enfermera: [{ name: "Torre de Carbón 1", realm: "Finca MacMillan", file: "coal_tower.png" }, { name: "El Templo de la Purgación", realm: "Bosque Rojo", file: "temple.png" }, { name: "Capilla del Padre Campbell", realm: "Asilo Crotus Prenn", file: "chapel.png" }], deterioro: [{ name: "Pozo de Asfixia 1", realm: "Desguace Autohaven", file: "asphyxiation_pit.png" }, { name: "Cabaña de Sangre", realm: "Desguace Autohaven", file: "blood_lodge.png" }, { name: "Complejo del Monte Ormond 1", realm: "Monte Ormond", file: "ormond.png" }], pueblerino: [{ name: "Cabaña de Sangre", realm: "Desguace Autohaven", file: "blood_lodge.png" }, { name: "La Casa de los Thompson", realm: "Granja Coldwind", file: "thompson_house.png" }, { name: "Almacén Quejumbroso 2", realm: "Finca MacMillan", file: "groaning_storehouse_2.png" }], darklord: [{ name: "Torre de Carbón 2", realm: "Finca MacMillan", file: "coal_tower_2.png" }, { name: "Taller Ruinoso", realm: "Desguace Autohaven", file: "wreckers_yard.png" }, { name: "Establo en Ruinas", realm: "Granja Coldwind", file: "fractured_cowshed.png" }], ghoul: [{ name: "Gasolinera", realm: "Desguace Autohaven", file: "gas_heaven.png" }, { name: "Cabaña de Sangre", realm: "Desguace Autohaven", file: "blood_lodge.png" }, { name: "Pozo de Asfixia 2", realm: "Desguace Autohaven", file: "asphyxiation_pit_2.png" }], krasue: [{ name: "Mina del Lago Ormond", realm: "Monte Ormond", file: "ormond_mine.png" }, { name: "Cabaña de Sangre", realm: "Desguace Autohaven", file: "blood_lodge.png" }, { name: "Matadero Pestilente", realm: "Granja Coldwind", file: "rancid_slaughterhouse.png" }], singularidad: [{ name: "Salón Dead Dawg", realm: "Tumba de Glenvale", file: "dead_dawg.png" }, { name: "Desguace", realm: "Desguace Autohaven", file: "wretched_shop.png" }, { name: "Almacén Quejumbroso 2", realm: "Finca MacMillan", file: "groaning_storehouse_2.png" }], espiritu: [{ name: "Desguace", realm: "Desguace Autohaven", file: "wretched_shop.png" }, { name: "Torre de Carbón 1", realm: "Finca MacMillan", file: "coal_tower.png" }, { name: "Taller Ruinoso", realm: "Desguace Autohaven", file: "wreckers_yard.png" }], desconocido: [{ name: "Desguace", realm: "Desguace Autohaven", file: "wretched_shop.png" }, { name: "Plaza de Greenville", realm: "Plaza de Greenville", file: "greenville.png" }, { name: "Almacén Quejumbroso 2", realm: "Finca MacMillan", file: "groaning_storehouse_2.png" }], liche: [{ name: "Refugio Caído", realm: "Bosque de los Gritos", file: "forgotten_ruins.png" }, { name: "Salón Dead Dawg", realm: "Tumba de Glenvale", file: "dead_dawg.png" }, { name: "Despensa Sombría", realm: "Pantano de Aguasnegras", file: "grim_pantry.png" }], xenomorfo: [{ name: "Taller Ruinoso", realm: "Desguace Autohaven", file: "wreckers_yard.png" }, { name: "Fundición de la Miseria 1", realm: "Finca MacMillan", file: "iron_works.png" }, { name: "Complejo del Monte Ormond 1", realm: "Monte Ormond", file: "ormond.png" }], primero: [{ name: "Salón Dead Dawg", realm: "Tumba de Glenvale", file: "dead_dawg.png" }, { name: "El Complejo Subterrárare", realm: "Laboratorio Hawkins", file: "hawkins.png" }, { name: "Desguace", realm: "Desguace Autohaven", file: "wretched_shop.png" }], cerebro: [{ name: "Torre de Carbón 1", realm: "Finca MacMillan", file: "coal_tower.png" }, { name: "Taller Ruinoso", realm: "Desguace Autohaven", file: "wreckers_yard.png" }, { name: "Salón Dead Dawg", realm: "Tumba de Glenvale", file: "dead_dawg.png" }], oni: [{ name: "Torre de Carbón 1", realm: "Finca MacMillan", file: "coal_tower.png" }, { name: "Plaza de Greenville", realm: "Plaza de Greenville", file: "greenville.png" }, { name: "Campos Podridos", realm: "Granja Coldwind", file: "rotten_fields.png" }], plaga: [{ name: "Lugar de Descanso de Azarov", realm: "Desguace Autohaven", file: "azarovs_resting_place.png" }, { name: "Pozo de Asfixia 1", realm: "Desguace Autohaven", file: "asphyxiation_pit.png" }, { name: "Santuario de la Cólera 1", realm: "Finca Yamaoka", file: "sanctum_of_wrath.png" }], verdugo: [{ name: "Matadero Pestilente", realm: "Granja Coldwind", file: "rancid_slaughterhouse.png" }, { name: "Desguace", realm: "Desguace Autohaven", file: "wretched_shop.png" }, { name: "Taller Ruinoso", realm: "Desguace Autohaven", file: "wreckers_yard.png" }], traicionero: [{ name: "Desguace", realm: "Desguace Autohaven", file: "wretched_shop.png" }, { name: "Torre de Carbón 1", realm: "Finca MacMillan", file: "coal_tower.png" }, { name: "Matadero Pestilente", realm: "Granja Coldwind", file: "rancid_slaughterhouse.png" }], mellizos: [{ name: "Lugar de Descanso de Azarov", realm: "Desguace Autohaven", file: "azarovs_resting_place.png" }, { name: "Pozo de Asfixia 1", realm: "Desguace Autohaven", file: "asphyxiation_pit.png" }, { name: "Gasolinera", realm: "Desguace Autohaven", file: "gas_heaven.png" }], caballero: [{ name: "Fundición de la Miseria 1", realm: "Finca MacMillan", file: "iron_works.png" }, { name: "Matadero Pestilente", realm: "Granja Coldwind", file: "rancid_slaughterhouse.png" }, { name: "Almacén Quejumbroso 1", realm: "Finca MacMillan", file: "groaning_storehouse.png" }], cazadora: [{ name: "Torre de Carbón 1", realm: "Finca MacMillan", file: "coal_tower.png" }, { name: "Desguace", realm: "Desguace Autohaven", file: "wretched_shop.png" }, { name: "Salón Dead Dawg", realm: "Tumba de Glenvale", file: "dead_dawg.png" }], adiestradora: [{ name: "Taller Ruinoso", realm: "Desguace Autohaven", file: "wreckers_yard.png" }, { name: "Torre de Carbón 2", realm: "Finca MacMillan", file: "coal_tower_2.png" }, { name: "Salón Dead Dawg", realm: "Tumba de Glenvale", file: "dead_dawg.png" }], goodguy: [{ name: "Desguace", realm: "Desguace Autohaven", file: "wretched_shop.png" }, { name: "El Complejo Subterráneo", realm: "Laboratorio Hawkins", file: "hawkins.png" }, { name: "Torre de Carbón 1", realm: "Finca MacMillan", file: "coal_tower.png" }], pesadilla: [{ name: "Salón Dead Dawg", realm: "Tumba de Glenvale", file: "dead_dawg.png" }, { name: "Desguace", realm: "Desguace Autohaven", file: "wretched_shop.png" }, { name: "Despensa Sombría", realm: "Pantano de Aguasnegras", file: "grim_pantry.png" }], draga: [{ name: "Escuela Primaria Midwich", realm: "Silent Hill", file: "midwich.png" }, { name: "Salón Dead Dawg", realm: "Tumba de Glenvale", file: "dead_dawg.png" }, { name: "El Complejo Subterráneo", realm: "Laboratorio Hawkins", file: "hawkins.png" }], animatronico: [{ name: "Desguace", realm: "Desguace Autohaven", file: "wretched_shop.png" }, { name: "Plaza de Greenville", realm: "Plaza de Greenville", file: "greenville.png" }, { name: "Despensa Sombría", realm: "Pantano de Aguasnegras", file: "grim_pantry.png" }], artista: [{ name: "Lugar de Descanso de Azarov", realm: "Desguace Autohaven", file: "azarovs_resting_place.png" }, { name: "Pozo de Asfixia 1", realm: "Desguace Autohaven", file: "asphyxiation_pit.png" }, { name: "Taller Ruinoso", realm: "Desguace Autohaven", file: "wreckers_yard.png" }], cenobita: [{ name: "Salón Dead Dawg", realm: "Tumba de Glenvale", file: "dead_dawg.png" }, { name: "Pozo de Asfixia 1", realm: "Desguace Autohaven", file: "asphyxiation_pit.png" }, { name: "Desguace", realm: "Desguace Autohaven", file: "wretched_shop.png" }], payaso: [{ name: "Desguace", realm: "Desguace Autohaven", file: "wretched_shop.png" }, { name: "La Rosa Pálida", realm: "Pantano de Aguasnegras", file: "pale_rose.png" }, { name: "Torre de Carbón 1", realm: "Finca MacMillan", file: "coal_tower.png" }], arponero: [{ name: "Lugar de Descanso de Azarov", realm: "Desguace Autohaven", file: "azarovs_resting_place.png" }, { name: "Pozo de Asfixia 1", realm: "Desguace Autohaven", file: "asphyxiation_pit.png" }, { name: "Santuario de la Cólera 1", realm: "Finca Yamaoka", file: "sanctum_of_wrath.png" }], demogorgon: [{ name: "Torre de Carbón 1", realm: "Finca MacMillan", file: "coal_tower.png" }, { name: "Almacén Quejumbroso 1", realm: "Finca MacMillan", file: "groaning_storehouse.png" }, { name: "Taller Ruinoso", realm: "Desguace Autohaven", file: "wreckers_yard.png" }], onryo: [{ name: "Escuela Primaria Midwich", realm: "Silent Hill", file: "midwich.png" }, { name: "Centro de Tratamiento", realm: "Lery", file: "lerys.png" }, { name: "El Complejo Subterráneo", realm: "Hawkins", file: "hawkins.png" }], cerda: [{ name: "Escuela Primaria Midwich", realm: "Silent Hill", file: "midwich.png" }, { name: "Centro de Tratamiento", realm: "Lery", file: "lerys.png" }, { name: "El Complejo Subterráneo", realm: "Hawkins", file: "hawkins.png" }], comerciante: [{ name: "Ala Este de la Comisaría RPD", realm: "Raccoon City", file: "rpd_east.png" }, { name: "Centro de Tratamiento", realm: "Lery", file: "lerys.png" }, { name: "Refugio Caído", realm: "Bosque Gritos", file: "forgotten_ruins.png" }], espectro: [{ name: "Salón Dead Dawg", realm: "Tumba de Glenvale", file: "dead_dawg.png" }, { name: "Torre de Carbón 1", realm: "Finca MacMillan", file: "coal_tower.png" }, { name: "El Complejo Subterráneo", realm: "Hawkins", file: "hawkins.png" }], doctor: [{ name: "Taller Ruinoso", realm: "Desguace Autohaven", file: "wreckers_yard.png" }, { name: "Capilla del Padre Campbell", realm: "Asilo Prenn", file: "chapel.png" }, { name: "La Rosa Pálida", realm: "Pantano", file: "pale_rose.png" }], ghostface: [{ name: "Escuela Primaria Midwich", realm: "Silent Hill", file: "midwich.png" }, { name: "Centro de Tratamiento", realm: "Lery", file: "lerys.png" }, { name: "El Complejo Subterráneo", realm: "Hawkins", file: "hawkins.png" }], legion: [{ name: "Salón Dead Dawg", realm: "Tumba de Glenvale", file: "dead_dawg.png" }, { name: "Desguace", realm: "Desguace Autohaven", file: "wretched_shop.png" }, { name: "Capilla del Padre Campbell", realm: "Asilo Prenn", file: "chapel.png" }], myers: [{ name: "Escuela Primaria Midwich", realm: "Silent Hill", file: "midwich.png" }, { name: "Centro de Tratamiento", realm: "Lery", file: "lerys.png" }, { name: "El Complejo Subterráneo", realm: "Hawkins", file: "hawkins.png" }], nemesis: [{ name: "Capilla del Padre Campbell", realm: "Asilo Prenn", file: "chapel.png" }, { name: "Santuario de la Cólera 1", realm: "Finca Yamaoka", file: "sanctum_of_wrath.png" }, { name: "La Rosa Pálida", realm: "Pantano", file: "pale_rose.png" }], trampero: [{ name: "Torre de Carbón 1", realm: "Finca MacMillan", file: "coal_tower.png" }, { name: "Despensa Sombría", realm: "Pantano de Aguasnegras", file: "grim_pantry.png" }, { name: "Salón Dead Dawg", realm: "Tumba de Glenvale", file: "dead_dawg.png" }], bruja: [{ name: "Desguace", realm: "Desguace Autohaven", file: "wretched_shop.png" }, { name: "Escuela Primaria Midwich", realm: "Silent Hill", file: "midwich.png" }, { name: "La Rosa Pálida", realm: "Pantano de Aguasnegras", file: "pale_rose.png" }], canibal: [{ name: "Desguace", realm: "Desguace Autohaven", file: "wretched_shop.png" }, { name: "Salón Dead Dawg", realm: "Tumba de Glenvale", file: "dead_dawg.png" }, { name: "Santuario de la Cólera 1", realm: "Finca Yamaoka", file: "sanctum_of_wrath.png" }] };
+    const data = { 1: ["enfermera","deterioro","pueblerino"], 2: ["singularidad","espiritu","darklord","ghoul","krasue"], 3: ["animatronico","artista","cenobita","payaso","arponero","demogorgon","draga","pesadilla","goodguy","adiestradora","cazadora","caballero","cerebro","oni","plaga","verdugo","traicionero","mellizos","desconocido","liche","xenomorfo","primero"], 4: ["doctor","ghostface","legion","myers","nemesis","onryo","cerda","comerciante","espectro"], 5: ["trampero","bruja","canibal"] };
+    const names = { enfermera:"Enfermera", deterioro:"Deterioro", pueblerino:"Pueblerino", singularidad:"Singularidad", espiritu:"Espíritu", darklord:"Dark Lord", ghoul:"Ghoul", krasue:"Krasue", animatronico:"Animatrónico", artista:"Artista", cenobita:"Cenobita", payaso:"Payaso", arponero:"Arponero", demogorgon:"Demogorgon", draga:"Draga", pesadilla:"Pesadilla", goodguy:"Good Guy", adiestradora:"Adiestradora", comportamiento: "Comportamiento", cazadora:"Cazadora", caballero:"Caballero", cerebro:"Cerebro", oni:"Oni", plaga:"Plaga", verdugo:"Verdugo", traicionero:"Traicionero", mellizos:"Mellizos", desconocido:"Desconocido", liche:"Liche", xenomorfo:"Xenomorfo", primero:"Primero", doctor:"Doctor", ghostface:"Ghostface", legion:"Legión", myers:"Myers", nemesis:"Némesis", onryo:"Onryo", cerda:"Cerda", comerciante:"Comerciante", espectro:"Espectro", trampero:"Trampero", bruja:"Bruja", canibal:"Caníbal" };
+
+    const killerPerksBanned = ["Instinto Alienígena", "Hijo de la Luz", "Percepción Activada", "Barbacoa y Chile", "Bestia de Presa", "Murmullo Amargo", "Golpe de Gracia", "Arrogancia Tenebrosa", "Oscuridad Expuesta", "Interruptor del Hombre Muerto", "Candado", "Disolución", "Dominación", "Duda Impuesta", "Unidos eternamente", "Amigos para siempre", "Veda Abierta", "Oído para la maquinaria", "Limitaciones Genéticas", "Acogida Nefasta", "Avería", "Empleo disponible", "Maleficio: Favor de Sangre", "Maleficio: Control de Masas", "Maleficio: Enfréntate a la Oscuridad", "Maleficio: Tierra Embrujada", "Maleficio: Tierra Colmena", "Maleficio: Obertura del Mal", "Maleficio: Pentimento", "Maleficio: Represalias", "Maleficio: La Emoción de la Caza", "Soberbia", "Codicia Humana", "Noqueo", "Toque Lánguido", "Acecho Letal", "Influencia", "Aprendizaje de máquina", "Sin descanso", "Nadie es libre", "Sin escondite", "Miedo Fantasmal", "Jugar con la comida", "Depredación", "Voraz", "Gancho Flagelante: Oleada de Ira", "Gancho Flagelante: Brújula Cerrada", "Gancho Flagelante: Santuario Monstruoso", "Proyecto Secreto", "Deslumbrado", "Anatomía Superior", "Terminal", "¡PLAF!", "Arma Definitiva", "Separación", "Imprevisto", "Mirada Errante", "Sintonía con la Urdimbre", "Tácticas de Zanshin"];
+    const survPerksBannedList = ["Autodidacta", "Canguro", "Jugador secundario", "Inspiración bárdica", "Arrebato", "Torrente de sangre", "Bendición: Circulo de curación", "Bendición: Teoría oscura", "Bendición: Exponencial", "Bendición: Iluminación", "Bendición: Paso sombrío", "Tiempo prestado", "Ruptura", "Construcción duradera", "Sujétate", "Camaradería", "Cambio de planes", "Separación limpia", "¡Ven por mí!", "Convicción", "Contrafuerza", "Percepción oscura", "Fecha límite", "Corazonada", "No hacer daño", "Dramaturgia", "Deber de socorro", "Percepción extrasensorial", "Ojos de Belmont", "Primera línea", "Neblinoso", "Notas fantasmales", "Curtida", "Hiperconcentración", "Concentración interna", "Invocación: Cuervos traicioneros", "Invocación: Arañas tejedoras", "Familia", "Abandonado a tu suerte", "Perfil bajo", "Hecho para esto", "Espejismo", "Momento de gloria", "Objeto de obsesión", "Extraoficial", "¡Un, dos, tres, cuatro!", "Pasión", "Giro argumental", "Energía potencial", "Lucha intensa", "Demuestra lo que vales", "Táctica veloz", "Curación reactiva", "Reafirmación", "Resurgimiento", "Vida en la carretera", "Sabotear", "Compañero de escena", "Carga sobre los hombros", "Carne resbaladiza", "Caza menor", "Solo quedo yo", "Salvaguarda de alma", "Especialista", "Escalofríos", "Bajo vigilancia", "Visión estática", "Fuerza en las sombras", "Trabajo en equipo: sigilo colectivo", "Trabajo en equipo: circuito completo", "Trabajo en equipo: poder dual", "Trabajo en equipo: tono suave", "Trabajo en equipo: al derribo", "Trabajo en equipo: curtirse", "Solucionador de problemas", "Vigilia", "¡Despierta!", "Te vemos", "Vamos a vivir para siempre", "Embrujada", "Interceptor", "Cinco pasos por delante"];
+    const globalKillerCombos = ["Resistente + Furia Espiritual", "Nemesis + Rencor", "Nadie escapa de la muerte + Sin salida", "Ruina + Destino Desdichado"];
+    const globalSurvCombos = ["Voluntad de hierro + Golpe de suerte", "Sobreponerse + Golpe de suerte", "Consejo paterno + Golpe decisivo"];
+
+    let currentKillerId = null;
+    let selectedCard = null;
+
+    function switchTab(tab) {
+      document.querySelectorAll('.tab-content').forEach(c => c.classList.add('hidden'));
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      document.getElementById(`${tab}-view`).classList.remove('hidden');
+      document.getElementById(`btn-${tab}`).classList.add('active');
+
+      const sidebar = document.getElementById('sidebar-main');
+      const mainLayout = document.getElementById('main-layout');
+      const draftControls = document.getElementById('draft-controls');
+
+      if (tab === 'asesino') {
+        sidebar.classList.remove('hidden');
+        mainLayout.classList.add('xl:grid-cols-[1fr,450px]');
+        draftControls.classList.remove('hidden');
+        draftControls.classList.add('flex');
+      } else {
+        sidebar.classList.add('hidden');
+        mainLayout.classList.remove('xl:grid-cols-[1fr,450px]');
+        draftControls.classList.add('hidden');
+        draftControls.classList.remove('flex');
+      }
+      
+      if (tab === 'mapas') renderMaps();
+      if (tab === 'perks') renderGeneralPerks();
+    }
+
+    function toggleAccordion(element) {
+      const parent = element.parentElement;
+      const isOpen = parent.classList.contains('open');
+      const container = parent.parentElement;
+      container.querySelectorAll('.tier-accordion').forEach(acc => acc.classList.remove('open'));
+      if(!isOpen) parent.classList.add('open');
+    }
+
+    function renderKillers() {
+      const container = document.getElementById('asesino-view');
+      container.innerHTML = "";
+      Object.keys(data).forEach(tier => {
+        const acc = document.createElement('div');
+        acc.className = `tier-accordion t-${tier}`;
+        acc.innerHTML = `
+          <div class="tier-trigger" onclick="toggleAccordion(this)">
+            <span class="font-black italic text-base uppercase tracking-widest">Tier ${tier}</span>
+            <span class="icon-plus">+</span>
+          </div>
+          <div class="tier-content">
+            <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 p-4">
+              ${data[tier].map(k => `
+                <div class="character-card p-6 rounded-xl text-center cursor-pointer" onclick="selectKiller('${k}', ${tier}, this)" oncontextmenu="handleBan(event, this)">
+                  <img src="img/${k}.png" class="w-16 h-16 mx-auto mb-3 object-contain" onerror="this.src='https://placehold.co/120/111/444?text=?'">
+                  <p class="text-[10px] font-black uppercase text-gray-500 tracking-tighter">${names[k]}</p>
+                </div>`).join('')}
+            </div>
+          </div>`;
+        container.appendChild(acc);
+      });
+    }
+
+    function selectKiller(id, tier, el) {
+      if(el.classList.contains('banned')) return;
+      if(selectedCard) selectedCard.classList.remove('selected');
+      el.classList.add('selected');
+      selectedCard = el;
+      currentKillerId = id;
+      
+      const tiers = { 1: bannedTier1, 2: bannedTier2, 3: bannedTier3, 4: bannedTier4, 5: bannedTier5 };
+      const tierObj = tiers[tier];
+      
+      let perks = Array.isArray(tierObj.perks) ? tierObj.perks : (tierObj.perks[id] || []);
+      let addons = (tierObj.addons && tierObj.addons[id]) ? tierObj.addons[id] : [];
+      let combos = (tierObj.combos && Array.isArray(tierObj.combos)) ? tierObj.combos : (tierObj.combos && tierObj.combos[id] ? tierObj.combos[id] : []);
+      let addCombos = (tierObj.addonCombos && tierObj.addonCombos[id]) ? tierObj.addonCombos[id] : [];
+
+      const info = document.getElementById('info-content');
+      info.classList.remove('opacity-40');
+      info.innerHTML = `
+        <div class="animate-in fade-in duration-300 w-full text-left">
+          <div class="flex items-center gap-6 mb-10 border-b border-gray-900 pb-8">
+            <img src="img/${id}.png" class="w-20 h-20" onerror="this.src='https://placehold.co/150/111/ef4444?text=?'">
+            <div>
+              <h2 class="text-3xl font-black italic uppercase text-white leading-none mb-2">${names[id]}</h2>
+              <p class="text-red-500 text-xs font-black tracking-[0.3em] uppercase">Rank Tier ${tier}</p>
+            </div>
+          </div>
+          <div class="space-y-10">
+            <section>
+              <h3 class="text-[11px] font-black text-gray-600 uppercase tracking-widest mb-4 border-l-4 border-red-600 pl-4">Perks Prohibidas</h3>
+              <div class="grid grid-cols-2 gap-3">
+                ${perks.length ? perks.map(p => `
+                  <div class="perk-container-visual">
+                    <img src="${getPerkIcon(p)}" class="perk-icon-big" onerror="handleImgError(this, '${p}', 'perks')">
+                    <div class="perk-name-overlay">${p}</div>
+                  </div>`).join('') : '<p class="text-xs italic text-gray-700">Sin restricciones especiales</p>'}
+              </div>
+            </section>
+            <section>
+              <h3 class="text-[11px] font-black text-gray-600 uppercase tracking-widest mb-4 border-l-4 border-blue-600 pl-4">Accesorios Prohibidos</h3>
+              <div class="grid grid-cols-2 gap-3">
+                ${addons.length ? addons.map(a => `
+                  <div class="perk-container-visual perk-container-surv">
+                    <img src="${getAddonIcon(a)}" class="perk-icon-big" onerror="handleImgError(this, '${a}', 'addon')">
+                    <div class="perk-name-overlay">${a}</div>
+                  </div>`).join('') : '<p class="text-xs italic text-gray-700">Sin restricciones</p>'}
+              </div>
+            </section>
+            ${combos.length || addCombos.length ? `
+            <section>
+              <h3 class="text-[11px] font-black text-orange-600 uppercase tracking-widest mb-4 border-l-4 border-orange-600 pl-4">Combos Baneados</h3>
+              <div class="grid grid-cols-1 gap-4">
+                ${combos.map(c => renderComboWithIcons(c)).join('')}
+                ${addCombos.map(ac => renderComboWithIcons(ac, 'addon')).join('')}
+              </div>
+            </section>` : ''}
+          </div>
+        </div>`;
+    }
+
+    function renderSurvLists() {
+      const container = document.getElementById('superviviente-view');
+      container.innerHTML = "";
+      const stiers = [ { id: 1, title: "Vs Tier 1", color: "t-1", list: survBans.t1 }, { id: 2, title: "Vs Tier 2", color: "t-2", isComplex: true }, { id: 3, title: "Vs Tier 3", color: "t-3", list: survBans.t3 }, { id: 4, title: "Vs Tier 4", color: "t-4", list: survBans.t4 }, { id: 5, title: "Vs Tier 5", color: "t-5", list: survBans.t5 } ];
+      stiers.forEach(st => {
+        const acc = document.createElement('div');
+        acc.className = `tier-accordion ${st.color}`;
+        let innerHTML = "";
+        if(st.isComplex) {
+          innerHTML = `<div class="space-y-10"> ${Object.entries(survBans.t2).map(([key, list]) => ` <div> <p class="text-[11px] font-black text-gray-500 mb-4 uppercase tracking-widest border-b border-gray-900 pb-3">Vs ${key === 'trio' ? 'THE DARK LORD / GHOUL / KRASUE' : key.toUpperCase()}</p> <div class="grid grid-cols-2 md:grid-cols-5 lg:grid-cols-6 gap-3"> ${list.map(p => ` <div class="perk-container-visual perk-container-surv"> <img src="${getPerkIcon(p)}" class="perk-icon-big" onerror="handleImgError(this, '${p}', 'perks')"> <div class="perk-name-overlay">${p}</div> </div>`).join('')} </div> </div> `).join('')} </div>`;
+        } else {
+          innerHTML = `<div class="grid grid-cols-2 md:grid-cols-5 lg:grid-cols-6 gap-3"> ${st.list.length > 0 ? st.list.map(p => ` <div class="perk-container-visual perk-container-surv"> <img src="${getPerkIcon(p)}" class="perk-icon-big" onerror="handleImgError(this, '${p}', 'perks')"> <div class="perk-name-overlay">${p}</div> </div>`).join('') : '<p class="text-xs italic text-gray-700 col-span-full text-center py-4">Ninguna adicional exceptuando las generales</p>'} </div>`;
+        }
+        acc.innerHTML = ` <div class="tier-trigger" onclick="toggleAccordion(this)"> <span class="font-black italic text-base uppercase">${st.title}</span> <span class="icon-plus">+</span> </div> <div class="tier-content">${innerHTML}</div>`;
+        container.appendChild(acc);
+      });
+    }
+
+    function renderMaps() {
+      const grid = document.getElementById('mapas-grid');
+      const inst = document.getElementById('map-instructions');
+      grid.innerHTML = "";
+      if (!currentKillerId) {
+        inst.innerHTML = "Selecciona un asesino primero en la pestaña 'Asesinos'";
+        return;
+      }
+      inst.innerHTML = `Mapas Sugeridos para ${names[currentKillerId]}`;
+      const maps = killerMaps[currentKillerId] || [];
+      maps.forEach(m => {
+        const card = document.createElement('div');
+        card.className = "bg-gray-900/30 rounded-xl overflow-hidden border border-gray-800 flex items-center p-6 gap-6 hover:border-blue-900/50 transition";
+        card.innerHTML = ` <div class="w-32 h-20 bg-black rounded-lg border border-gray-800 shrink-0 overflow-hidden"> <img src="img/${m.file}" class="w-full h-full object-cover" onerror="this.src='https://placehold.co/200/000/333?text=MAP'"> </div> <div> <p class="text-sm font-black uppercase text-blue-400 italic mb-2">${m.name}</p> <p class="text-[10px] font-bold text-gray-600 uppercase tracking-widest">${m.realm}</p> </div>`;
+        grid.appendChild(card);
+      });
+    }
+
+    function renderGeneralPerks() {
+      document.getElementById('killer-general-grid').innerHTML = killerPerksBanned.sort().map(p => ` <div class="perk-container-visual"> <img src="${getPerkIcon(p)}" class="perk-icon-big" onerror="handleImgError(this, '${p}', 'perks')"> <div class="perk-name-overlay">${p}</div> </div>`).join('');
+      document.getElementById('surv-general-grid').innerHTML = survPerksBannedList.sort().map(p => ` <div class="perk-container-visual perk-container-surv"> <img src="${getPerkIcon(p)}" class="perk-icon-big" onerror="handleImgError(this, '${p}', 'perks')"> <div class="perk-name-overlay">${p}</div> </div>`).join('');
+      document.getElementById('killer-combos-grid').innerHTML = globalKillerCombos.map(c => renderComboWithIcons(c, 'killer')).join('');
+      document.getElementById('surv-combos-grid').innerHTML = globalSurvCombos.map(c => renderComboWithIcons(c, 'surv')).join('');
+    }
+
+    function handleBan(e, el) {
+      e.preventDefault();
+      el.classList.toggle('banned');
+      const t = document.getElementById('ban-toast');
+      t.style.opacity = "1";
+      setTimeout(() => t.style.opacity = "0", 1200);
+    }
+
+    function resetBans() {
+      document.querySelectorAll('.character-card').forEach(c => c.classList.remove('banned', 'selected'));
+      currentKillerId = null;
+      const info = document.getElementById('info-content');
+      info.innerHTML = `<p class="text-gray-700 font-bold uppercase text-[11px] tracking-[0.4em]">Draft Reiniciado</p>`;
+      info.classList.add('opacity-40');
+    }
+
+    renderKillers();
+    renderSurvLists();
+  </script>
+</body>
+</html>
